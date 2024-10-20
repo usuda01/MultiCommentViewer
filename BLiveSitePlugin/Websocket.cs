@@ -1,6 +1,7 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using System.Threading;
+using System.Security.Authentication;
 using WebSocket4Net;
 using System.Diagnostics;
 using System.Collections.Generic;
@@ -32,6 +33,10 @@ namespace BLiveSitePlugin
                 ReceiveBufferSize = 8192,
                 NoDelay = true
             };
+
+            // Tls12
+            _ws.Security.EnabledSslProtocols = SslProtocols.Tls12;
+
             _ws.MessageReceived += (s, e) =>
             {
                 Log("_ws.MessageReceived: " + e.Message);
@@ -44,7 +49,7 @@ namespace BLiveSitePlugin
             };
             _ws.Opened += (s, e) =>
             {
-                Log("_ws.Opend");
+                Log("_ws.Opened");
                 Opened?.Invoke(this, EventArgs.Empty);
             };
             _ws.Closed += (s, e) =>

@@ -102,7 +102,6 @@ namespace BLiveSitePlugin
             catch { }
             return cc;
         }
-        //protected virtual Extract()
         private async Task ConnectInternalAsync(string input, IBrowserProfile browserProfile)
         {
             if (_ws != null)
@@ -126,117 +125,35 @@ namespace BLiveSitePlugin
                 return;
             }
 
-            var movieContext2 = await GetMovieInfo(liveId);
-            var movieId = movieContext2.MovieId;
-            if (movieId == 0)
-            {
-                SendSystemInfo("存在しないURLまたはIDです", InfoType.Error);
-                AfterDisconnected();
-                return;
-            }
-            if (movieContext2.OnairStatus == 2)
-            {
-                SendSystemInfo("この放送は終了しています", InfoType.Error);
-                AfterDisconnected();
-                return;
-            }
-            MetadataUpdated?.Invoke(this, new Metadata { Title = movieContext2.Title });
-
-            _startAt = movieContext2.StartedAt.DateTime;
-            _500msTimer.Enabled = true;
-
-            var (chats, raw) = await GetChats(movieContext2);
-            try
-            {
-                foreach (var item in chats)
-                {
-                    var comment = Tools.Parse(item);
-                    var commentData = Tools.CreateCommentData(comment, _startAt, _siteOptions);
-                    var messageContext = CreateMessageContext(comment, commentData, true);
-                    if (messageContext != null)
-                    {
-                        MessageReceived?.Invoke(this, messageContext);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogException(ex, "", "raw=" + raw);
-            }
-            foreach (var user in _userStoreManager.GetAllUsers(SiteType.BLive))
-            {
-                if (!(user is IUser2 user2)) continue;
-                _userDict.AddOrUpdate(user2.UserId, user2, (id, u) => u);
-            }
         Reconnect:
             _ws = CreateBLiveWebsocket();
             _ws.Received += WebSocket_Received;
 
             var userAgent = GetUserAgent(browserProfile.Type);
-            var wsTask = _ws.ReceiveAsync(movieId.ToString(), userAgent, cookies);
-            var blackListProvider = CreateBlacklistProvider();
-            blackListProvider.Received += BlackListProvider_Received;
-            var blackTask = blackListProvider.ReceiveAsync(movieId.ToString(), _context);
+            var wsTask = _ws.ReceiveAsync(liveId, userAgent, cookies);
 
             var tasks = new List<Task>
             {
                 wsTask,
-                blackTask
             };
 
             while (tasks.Count > 0)
             {
                 var t = await Task.WhenAny(tasks);
-                if (t == blackTask)
+                try
                 {
-                    try
-                    {
-                        await blackTask;
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogException(ex);
-                    }
-                    tasks.Remove(blackTask);
+                    await wsTask;
                 }
-                else
+                catch (Exception ex)
                 {
-                    blackListProvider.Disconnect();
-                    try
-                    {
-                        await blackTask;
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogException(ex);
-                    }
-                    tasks.Remove(blackTask);
-                    SendSystemInfo("ブラックリストタスク終了", InfoType.Debug);
-                    try
-                    {
-                        await wsTask;
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogException(ex);
-                    }
-                    tasks.Remove(wsTask);
-                    SendSystemInfo("wsタスク終了", InfoType.Debug);
+                    _logger.LogException(ex);
                 }
+                tasks.Remove(wsTask);
+                SendSystemInfo("wsタスク終了", InfoType.Debug);
             }
             _ws.Received -= WebSocket_Received;
-            blackListProvider.Received -= BlackListProvider_Received;
 
-            //意図的な切断では無い場合、配信がまだ続いているか確認して、配信中だったら再接続する。
-            //2019/03/12 heartbeatを送っているのにも関わらずwebsocketが切断されてしまう場合を確認。ブラウザでも配信中に切断されて再接続するのを確認済み。
-            if (!_isExpectedDisconnect)
-            {
-                var movieInfo = await GetMovieInfo(liveId);
-                if (movieInfo.OnairStatus == 1)
-                {
-                    goto Reconnect;
-                }
-            }
+            // TODO: 意図的ではない切断の場合は再接続する
         }
         public async Task ConnectAsync(string input, IBrowserProfile browserProfile)
         {
@@ -471,30 +388,6 @@ namespace BLiveSitePlugin
         Dictionary<string, UserViewModel> _userViewModelDict = new Dictionary<string, UserViewModel>();
         ConcurrentDictionary<string, IUser2> _userDict = new ConcurrentDictionary<string, IUser2>();
         DateTime _startAt;
-        //private BLiveCommentViewModel CreateCommentViewModel(IBLiveCommentData data)
-        //{
-        //    var userId = data.UserId;
-        //    bool isFirstComment;
-
-        //    if (_userCommentCountDict.ContainsKey(userId))
-        //    {
-        //        _userCommentCountDict[userId]++;
-        //        isFirstComment = false;
-        //    }
-        //    else
-        //    {
-        //        _userCommentCountDict.Add(userId, 1);
-        //        isFirstComment = true;
-        //    }
-        //    var user = _userStore.GetUser(userId);
-        //    if (!_userViewModelDict.TryGetValue(userId, out UserViewModel userVm))
-        //    {
-        //        userVm = new UserViewModel(user);
-        //        _userViewModelDict.Add(userId, userVm);
-        //    }
-        //    var cvm = new BLiveCommentViewModel(data, _options, _siteOptions,  this, isFirstComment, user);
-        //    return cvm;
-        //}
         private static string GetUserAgent(BrowserType browser)
         {
             string userAgent;
@@ -532,19 +425,6 @@ namespace BLiveSitePlugin
                         MessageReceived?.Invoke(this, messageContext);
                     }
                 }
-                else if (e is PacketMessageEventMessageAudienceCount audienceCount)
-                {
-                    var ac = audienceCount.AudienceCount;
-                    MetadataUpdated?.Invoke(this, new Metadata
-                    {
-                        CurrentViewers = ac.live_viewers.ToString(),
-                        TotalViewers = ac.viewers.ToString(),
-                    });
-                }
-                else if (e is PacketMessageEventMessageLiveEnd liveEnd)
-                {
-                    Disconnect();
-                }
             }
             catch (Exception ex)
             {
@@ -559,12 +439,11 @@ namespace BLiveSitePlugin
         public async Task<ICurrentUserInfo> GetCurrentUserInfo(IBrowserProfile browserProfile)
         {
             var cc = CreateCookieContainer(browserProfile);
-            //cookie: lang=ja; device=PC; _ga=GA1.2.942154475.1539615843; __gads=ID=88a3291937a6efee:T=1539615844:S=ALNI_MYcBerafVCLa-gDyYh9JnTfgleU-A; PHPSESSID=o1c7pk8c59qhruldatq57rg320; AWSELB=1DABC705044630618CF68466538D9E569C7CC479D88EB62F0E575B53AB66195021246B2874519AA68BDD9EC54E82BF3783441568103E6D3709DD7C06C7DE99E0A0C470B14E; _gid=GA1.2.1053933165.1541004736; init_dt=20181101023826; GED_PLAYLIST_ACTIVITY=W3sidSI6IkRNZGYiLCJ0c2wiOjE1NDEwMDc1NjEsIm52IjoxLCJ1cHQiOjE1NDEwMDc1MDYsImx0IjoxNTQxMDA3NTYxfV0.; random=RDMYEFRDLLPBQZJSRBUF; token=7bb004826a2d9b00d4bc6e3d933c88757e61b1c2; uuid=7A4E34CD-F8DD-3748-5A4A-3B2FD8D03DFC; access_token=1a9b0308-f56a-479d-bb63-43469ec90c1a; ci_session=CzIJaQI0Aj0AIl0sWTZRZVFgADxUdVBzDWkGdFF3BzBSaQE%2BV15RPVpmAXkIMg95Xj0AMVA3Aj1WdVdlAzIBYQsyUWNbNgVsVjRSNFcxUGELagkxAjUCNABgXWpZaVEyUWMAM1QyUGYNbgY0UTUHbVI3ATNXNVE2WjoBeQgyD3lePQAzUDYCPVZ1Vz0DYQEiC35RD1tvBThWdlJqV3dQPAsnCSoCIQI8ADBdZVk9UWFRZAA3VGdQNw05BjFRMQduUj0BI1c7UWVaMgFhCCsPY153AF1QZAJjVjNXIwNlASILeVFyWzUFKFY4UjJXMlBvC3EJZQIyAikAaF1mWT5RelFiADdUYVAuDT4GPlEmB2JSdQFqVzhRblogAS4Ieg9vXnUAXVBhAmZWI1cwAyIBagt5UWpbPgVhViBSIVc6UCYLaQlrAjkCJQArXTpZb1EsUSUAdVQyUHINLgY8UWUHY1IyAWpXelEnWjgBagg5DzBeJQB3UHYCYlYlVw4DdAE%2BC2FRNVtgBXlWOVJwVztQZgthCWkCIQI3AGBdbFk%2BUWJRYwBgVDVQZQ09BjRRPQdoUjABYlc5UWVaZAFjCGgPaV41ADdQMgI%2BVjNXYQM1ATcLblFnW28FeVY5UnBXO1BkC2IJaQIhAnMAPF0tWWFRPVE%2BAGdUO1BfDWUGY1EmB2JSdQFqVzJRYlo4AXkIPg9LXjMAR1A2AjNWFFcVAy0BFwsyURRbSgV2VjFSNFc1UG0LfglmAkICMwAYXXJZP1EWUWIAQFQTUDgNSAY3UTcHHVJAARNXI1FvWnEBYQg4DztePQAgUHcCYlY0VykDdQEiC29RIltRBTJWZlIhVzpQJgtpCWsCOQIlAGtdb1k4UWxRZwAyVGBQMQ0uBjxRdwdjUjcBZVc7UXZabQErCGwPZF51AGdQZgJYViJXIgNlASMLVVE5W2oFeVY5UnBXO1BjC2kJcQIyAjQAbl1qWTVRYFFyAD1UKlBzDTYGP1E%2BB3tSbwEjV15ROFptATwIYA9kXiUAOVBnAj1WZldqA3MBaws7UWJbNAV5Vm1Sc1dkUDsLIQk2AmACWAAsXSxZaVEmUXIAPVQ2UDoNPQY9UX8HKlI8AWFXMFFuWiABLgh6D29edQBdUHYCc1Y2VyUDdQEiCyhRa1t9BWFWNlI5VyNQNwsyCT0CZAIlAGJdIllx
             var me = await API.GetMeAsync(_dataSource, cc);
             return new CurrentUserInfo
             {
-                IsLoggedIn = !string.IsNullOrEmpty(me.UserPath),
-                UserId = me.UserPath,
+                IsLoggedIn = !string.IsNullOrEmpty(me.UserId),
+                UserId = me.UserId,
                 Username = me.DisplayName,
             };
         }

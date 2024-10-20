@@ -14,31 +14,31 @@ namespace BLiveSitePlugin
         //public event EventHandler<IBLiveCommentData> CommentReceived;
         public event EventHandler<IPacket> Received;
 
-        public async Task ReceiveAsync(string movieId, string userAgent, List<Cookie> cookies)
+        public async Task ReceiveAsync(string liveId, string userAgent, List<Cookie> cookies)
         {
             var cookieList = new List<KeyValuePair<string, string>>();
-            foreach (Cookie cookie in cookies)
-            {
-                if (cookie.Name == "AWSALB")
-                {
-                    cookieList.Add(new KeyValuePair<string, string>(cookie.Name, cookie.Value));
-                }
-            }
-            var origin = "https://www.blive.tv";
+
+            var origin = "https://live.carol-i.com";
 
             _websocket = new Websocket();
             _websocket.Received += Websocket_Received;
-            _websocket.Opened += Websocket_Opened;
-            var url = $"wss://chat.blive.tv/socket.io/?movieId={movieId}&EIO=3&transport=websocket";
+            // liveIdを渡すためのラムダ式でOpenedイベントを設定
+            _websocket.Opened += (sender, e) => Websocket_Opened(sender, e, liveId);
+
+            var url = $"wss://live.carol-i.com:6001/socket.io/?EIO=3&transport=websocket";
             await _websocket.ReceiveAsync(url, cookieList, userAgent, origin);
             //切断後処理
             _heartbeatTimer.Enabled = false;
 
         }
 
-        private void Websocket_Opened(object sender, EventArgs e)
+        private void Websocket_Opened(object sender, EventArgs e, string liveId)
         {
             _heartbeatTimer.Enabled = true;
+
+            // WebSocketが開かれた後にチャンネルにサブスクライブする
+            string subscribeMessage = $"42[\"subscribe\", {{\"channel\": \"message.received.{liveId}\"}}]";
+            Task.Run(async () => await SendAsync(subscribeMessage));
         }
 
         private void Websocket_Received(object sender, string e)

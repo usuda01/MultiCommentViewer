@@ -70,12 +70,16 @@ namespace BLiveSitePlugin
                             case '1':
                                 break;
                             case '2':
-                                var d = DynamicJson.Parse(str.Substring(2));
-                                var s = d[0];
-                                var t = Codeplex.Data.DynamicJson.Parse(d[1]);
-                                if (s == "message")
+                                // strの値
+                                // 42["App\\Events\\MessageReceived","message.received.4873",{"message":{"user_id":2,"room_id":4873,"content":"コメントテスト","updated_at":"2024-10-11T14:47:44.000000Z","created_at":"2024-10-11T14:47:44.000000Z","id":63635},"socket":null}]
+                                var jsonArray = JsonConvert.DeserializeObject<object[]>(str.Substring(2));
+                                string eventType = jsonArray[0].ToString();
+                                var messageData = JsonConvert.DeserializeObject<Dictionary<string, object>>(jsonArray[2].ToString());
+                                var message = JsonConvert.DeserializeObject<Dictionary<string, object>>(messageData["message"].ToString());
+                                if (eventType == "App\\Events\\MessageReceived")
                                 {
                                     int type;
+                                    /*
                                     if (t.type.GetType() == typeof(string))
                                     {
                                         type = int.Parse(t.type);
@@ -84,14 +88,25 @@ namespace BLiveSitePlugin
                                     {
                                         type = (int)t.type;
                                     }
+                                    */
+                                    type = BLIVE_SOCKET_TYPE_CHAT;
                                     if (type == BLIVE_SOCKET_TYPE_CHAT)
                                     {
-                                        var comment = JsonConvert.DeserializeObject<Low.Item>(t.data.ToString());
+                                        int userId = Convert.ToInt32(message["user_id"]);
+                                        var comment = new Low.Item
+                                        {
+                                            chat_id = Convert.ToString(message["id"]),
+                                            user_id = Convert.ToString(message["user_id"]),
+                                            user_name = Convert.ToString(message["user_name"]),
+                                            room_id = Convert.ToString(message["room_id"]),
+                                            message = Convert.ToString(message["content"]),
+                                            cre_dt = Convert.ToString(message["created_at"]),
+                                        };
                                         ret = new PacketMessageEventMessageChat(comment);
                                     }
                                     else if (type == BLIVE_SOCKET_TYPE_AUDIENCE_COUNT)
                                     {
-                                        var audi = JsonConvert.DeserializeObject<AudienceCount>(t.data.ToString());
+                                        var audi = JsonConvert.DeserializeObject<AudienceCount>(message.ToString());
                                         ret = new PacketMessageEventMessageAudienceCount(audi);
                                     }
                                     else if (type == BLIVE_SOCKET_TYPE_LIVE_END)
