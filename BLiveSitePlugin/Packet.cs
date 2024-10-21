@@ -118,18 +118,6 @@ namespace BLiveSitePlugin
                                         //"42[\"message\",\"{\\\"type\\\":5,\\\"data\\\":{\\\"movie_id\\\":\\\"427901\\\"}}\"]"
                                         ret = new PacketMessageEventMessageLiveStart();
                                     }
-                                    else if (type == BLIVE_SOCKET_TYPE_BLACKLIST_ADD)
-                                    {
-                                        //なぜかtypeが文字列！！
-                                        //"42[\"message\",\"{\\\"type\\\":\\\"6\\\",\\\"data\\\":{\\\"owner_to_banned_user_id\\\":\\\"96397446\\\"}}\"]"
-                                        ret = new PacketMessageEventMessageBlacklistAdd();
-                                    }
-                                    else if (type == BLIVE_SOCKET_TYPE_BLACKLIST_DELETE)
-                                    {
-                                        //なぜかtypeが文字列！！
-                                        //"42[\"message\",\"{\\\"type\\\":\\\"7\\\",\\\"data\\\":{\\\"owner_to_banned_user_id\\\":\\\"68963280\\\"}}\"]"
-                                        ret = new PacketMessageEventMessageBlacklistDelete();
-                                    }
                                     else if (type == BLIVE_SOCKET_TYPE_MODERATOR_ADD)
                                     {
                                         //なぜかtypeが文字列！！
@@ -222,8 +210,6 @@ namespace BLiveSitePlugin
     public class PacketMessageEventMessageLiveEnd : PacketMessageEventMessageBase { }
     public class PacketMessageEventMessageStatus : PacketMessageEventMessageBase { }
     public class PacketMessageEventMessageLiveStart : PacketMessageEventMessageBase { }
-    public class PacketMessageEventMessageBlacklistAdd : PacketMessageEventMessageBase { }
-    public class PacketMessageEventMessageBlacklistDelete : PacketMessageEventMessageBase { }
     public class PacketMessageEventMessageModeratorAdd : PacketMessageEventMessageBase { }
     public class PacketMessageEventMessageModeratorDelete : PacketMessageEventMessageBase { }
     public class PacketMessageAck : PacketMessageBase { }

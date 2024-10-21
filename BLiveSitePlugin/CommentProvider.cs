@@ -168,11 +168,6 @@ namespace BLiveSitePlugin
             }
         }
 
-        protected virtual IBlackListProvider CreateBlacklistProvider()
-        {
-            return new BlackListProvider(_dataSource, _logger);
-        }
-
         protected virtual IBLiveWebsocket CreateBLiveWebsocket()
         {
             return new BLiveWebsocket(_logger);
@@ -278,39 +273,6 @@ namespace BLiveSitePlugin
             var methods = new BLiveMessageMethods();
             messageContext = new BLiveMessageContext(message, metadata, methods);
             return messageContext;
-        }
-
-        private void BlackListProvider_Received(object sender, List<string> e)
-        {
-            try
-            {
-                var blackList = e;
-                //現状BAN状態のユーザ
-                var banned = _userDict.Where(kv => kv.Value.IsSiteNgUser).Select(kv => kv.Key).ToList();// _userViewModelDict.Where(kv => kv.Value.IsNgUser).Select(kv => kv.Key).ToList();
-
-                //ブラックリストに登録されているユーザのBANフラグをONにする
-                foreach (var black in blackList)
-                {
-                    if (_userDict.ContainsKey(black))
-                    {
-                        var user = _userDict[black];
-                        user.IsSiteNgUser = true;
-                    }
-                    //ブラックリストに入っていることが確認できたためリストから外す
-                    banned.Remove(black);
-                }
-
-                //ブラックリストに入っていなかったユーザのBANフラグをOFFにする
-                foreach (var white in banned)
-                {
-                    var u = _userDict[white];
-                    u.IsSiteNgUser = false;
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogException(ex);
-            }
         }
 
         IBLiveWebsocket _ws;
