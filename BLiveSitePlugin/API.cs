@@ -76,14 +76,6 @@ namespace BLiveSitePlugin
             var obj = Tools.Deserialize<Low.Movies.RootObject[]>(res);
             return obj;
         }
-        public static async Task<Low.WebsocketContext2> GetWebsocketContext2(IDataSource dataSource, string movieId, CookieContainer cc)
-        {
-            var url = $"https://chat.blive.tv/socket.io/?movieId={movieId}&EIO=3&transport=polling&t={Tools.Yeast()}";
-            var bytes = await dataSource.GetByteArrayAsync(url,cc);
-            var str = Tools.Bytes2String(bytes);
-            var packet = Packet.Parse(str) as PacketOpen;
-            return packet.Context;
-        }
         public static async Task<(Low.Chats.RootObject[], string raw)> GetChats(IDataSource dataSource, string liveId, DateTime toCreatedAt, CookieContainer cc)
         {
             //https://public.blive.tv/external/api/v5/movies/9PgmVnlqtMz/chats?to_created_at=2018-07-24T19:32:50.395Z
@@ -114,7 +106,6 @@ namespace BLiveSitePlugin.Low
         public string room_id { get; set; }
         public string chat_id { get; set; }
         public string message { get; set; }
-        public Stamp stamp { get; set; }
         public string item { get; set; }
         public int supporter_rank { get; set; }
         public int is_creaters { get; set; }
@@ -127,26 +118,9 @@ namespace BLiveSitePlugin.Low
         public int is_premium { get; set; }
         public int is_premium_hidden { get; set; }
         public string user_color { get; set; }
-        public Yell yell { get; set; }
         public string display_dt { get; set; }
         public string del_flg { get; set; }
         public string quality_type { get; set; }
-    }
-    public class Yell
-    {
-        public string yell_id { get; set; }
-        public string name { get; set; }
-        public string label { get; set; }
-        public string image_url { get; set; }
-        public string points { get; set; }
-        public string yells { get; set; }
-        public string ticker_seconds { get; set; }
-    }
-    public class Stamp
-    {
-        public string stamp_id { get; set; }
-        public string group_id { get; set; }
-        public string image_url { get; set; }
     }
     public class Data
     {

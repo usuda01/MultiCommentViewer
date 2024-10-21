@@ -152,9 +152,7 @@ namespace BLiveSitePlugin
                 Message = item.message,
                 Nickname = item.user_name,
                 PostedAt = DateTime.Parse(item.cre_dt),
-                StampUrl = item.stamp?.image_url,
                 UserId = item.user_id,
-                YellPoints = item.yell == null ? (long?)null : long.Parse(item.yell.points),
             };
             return comment;
         }
